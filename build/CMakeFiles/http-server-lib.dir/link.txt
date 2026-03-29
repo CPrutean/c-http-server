@@ -1,2 +1,0 @@
-/usr/bin/ar qc libhttp-server-lib.a "CMakeFiles/http-server-lib.dir/src/server.c.o" "CMakeFiles/http-server-lib.dir/src/http_parser.c.o" "CMakeFiles/http-server-lib.dir/src/router.c.o" "CMakeFiles/http-server-lib.dir/src/thread_pool.c.o"
-/usr/bin/ranlib libhttp-server-lib.a

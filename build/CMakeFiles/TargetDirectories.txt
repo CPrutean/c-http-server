@@ -1,4 +1,0 @@
-/Users/calinprutean/Code/c-http-server/build/CMakeFiles/http-server-lib.dir
-/Users/calinprutean/Code/c-http-server/build/CMakeFiles/http-server.dir
-/Users/calinprutean/Code/c-http-server/build/CMakeFiles/edit_cache.dir
-/Users/calinprutean/Code/c-http-server/build/CMakeFiles/rebuild_cache.dir
