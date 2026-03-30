@@ -1,21 +1,28 @@
 #include "server.h"
+#include "thread_pool.h"
+
 static int max_connections = 10;
 static volatile int running = 0;
 
-void start_server() { running = 1; }
-void stop_server() { running = 0; }
+void start_server(void) { running = 1; }
+void stop_server(void) { running = 0; }
 void set_max_connections(int connections) { max_connections = connections; }
-int get_max_connections() { return max_connections; }
+int get_max_connections(void) { return max_connections; }
 int check_connections(int sockfd) { return listen(sockfd, max_connections); }
 
 void server_loop(int sockfd) {
-  while (1) {
-    if (running && check_connections(sockfd)) {
-      // Handle actual accept and connection logic here.
-      struct sockaddr_storage adr;
-      int adr_size = sizeof(adr);
-      int new_fd = accept(sockfd, (struct sockaddr *)&adr, &adr_size);
-      // Pass new fd to thread handler
+  if (check_connections(sockfd) != 0) {
+    perror("listen error");
+    return;
+  }
+  while (running) {
+    struct sockaddr_storage adr;
+    socklen_t adr_size = sizeof(adr);
+    int new_fd = accept(sockfd, (struct sockaddr *)&adr, &adr_size);
+    if (new_fd != -1) {
+      dispatch_connection(new_fd);
+    } else {
+      perror("Failed to connect to listener");
     }
   }
 }
@@ -43,7 +50,7 @@ int create_server_socket(int port) {
   // get the socket descriptor
 
   int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-  if (fd != 0) {
+  if (fd == -1) {
     fprintf(stderr, "socket error");
     exit(1);
   }
