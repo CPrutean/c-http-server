@@ -4,6 +4,9 @@ static char **routes;
 static void **callbacks;
 static response_type_t *callback_types;
 static int num_routes;
+static const char *HTTP_BAD_REQUEST =
+    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "
+    "16\r\nConnection: close\r\n\r\n400 Bad Request.";
 
 static int get_route_ind(char *route) {
   int found = 0;
@@ -98,21 +101,43 @@ void update_route(char *route, void *ptr, response_type_t t) {
   }
 }
 
-char *return_route(char *route) {
-  int ind = get_route_ind(route);
-  if (ind == -1) {
-    return NULL;
-  }
+static char *handle_string_requests(int ind, http_command_t t) {
+  char *return_val;
+  switch (t) {
+  case (GET):
+    return (char *)callbacks[ind];
+  case (HEAD):
+    // the head header will be handled by the http_parser
+    // and create the http header response for later
+    return (char *)callbacks[ind];
+  default:
+    return HTTP_BAD_REQUEST;
+  };
+}
 
-  if (callback_types[ind] == STRING) {
-    return (char *)callbacks;
+// TODO implement http_command behavior
+char *route_command(char *route, http_command_t command) {
+  int i = get_route_ind(route);
+  if (callback_types[i] == STRING) {
+    return handle_string_requests(i, command);
   } else {
-    http_callback c = (http_callback)callbacks[ind];
-    char *r = c(route);
-    return r;
+    // Its up to you to define what a good and bad request is
+    http_callback c = (http_callback)callbacks[i];
+    return c(route, command);
   }
 }
 
-void dump_routes(void) {}
+void dump_routes(void) {
+  for (int i = 0; i < num_routes; i++) {
+    fprintf(stdout, "%s\n", routes[i]);
+  }
+}
 
-void close_routes(void) {}
+void close_routes(void) {
+  for (int i = 0; i < num_routes; i++) {
+    free(routes[i]);
+  }
+  free(callbacks);
+  free(callback_types);
+  free(routes);
+}
