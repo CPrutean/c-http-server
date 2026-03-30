@@ -9,6 +9,7 @@ pthread_cond_t thread_cond = PTHREAD_COND_INITIALIZER;
 
 struct sockfd_list {
   int *list;
+  struct addrinfo *addrlist;
   int size;
   int capacity;
 };
