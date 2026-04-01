@@ -1,16 +1,9 @@
 #ifndef __HTTP_SERVER
 #define __HTTP_SERVER
+#include "global_includes.h"
+#include "thread_pool.h"
 
-#include <netdb.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-
-void start_server(void);
-void stop_server(void);
+void start_server(int sockfd);
 void set_max_connections(int connections);
 int get_max_connections(void);
 int check_connections(int sockfd);

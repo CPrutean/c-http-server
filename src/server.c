@@ -4,28 +4,11 @@
 static int max_connections = 10;
 static volatile int running = 0;
 
-void start_server(void) { running = 1; }
+void start_server(int sockfd) { init_threads(max_connections, sockfd); }
 void stop_server(void) { running = 0; }
 void set_max_connections(int connections) { max_connections = connections; }
 int get_max_connections(void) { return max_connections; }
 int check_connections(int sockfd) { return listen(sockfd, max_connections); }
-
-void server_loop(int sockfd) {
-  if (check_connections(sockfd) != 0) {
-    perror("listen error");
-    return;
-  }
-  while (running) {
-    struct sockaddr_storage adr;
-    socklen_t adr_size = sizeof(adr);
-    int new_fd = accept(sockfd, (struct sockaddr *)&adr, &adr_size);
-    if (new_fd != -1) {
-      dispatch_connection(new_fd);
-    } else {
-      perror("Failed to connect to listener");
-    }
-  }
-}
 
 void generate_hints(struct addrinfo *hints) {
   memset(hints, 0, sizeof(struct addrinfo));
