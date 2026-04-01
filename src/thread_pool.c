@@ -1,7 +1,12 @@
 #include "thread_pool.h"
+#include "http_parser.h"
+#include "router.h"
+
+#define RECV_BUFF_S 1024
 
 static volatile int run_workers = 1;
 static int num_threads;
+static pthread_t discovery_thread;
 static pthread_t *thread_list;
 static int *thread_valid;
 pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -23,6 +28,8 @@ static void add_sock_fd(int sockfd);
 static int is_task_empty(void);
 
 static void *worker_thread(void *args) {
+  char *buffer[RECV_BUFF_S];
+
   while (run_workers) {
     pthread_mutex_lock(&queue_mutex);
 
@@ -30,15 +37,65 @@ static void *worker_thread(void *args) {
       pthread_cond_wait(&thread_cond, &queue_mutex);
     }
 
+    memset(buffer, 0, sizeof(buffer));
     int sfd = get_sock_fd();
     // Implement actual work to be done
+    size_t s = recv(sfd, buffer, sizeof(buffer) - 1, 0);
+    if (s > 0) {
+
+      fprintf(stdout, "Message recieved");
+
+      response_type_t t = get_route_type(inf->route);
+      if (t == 255) {
+        fprintf(stderr, "INVALID ROUTE");
+        continue;
+      }
+
+      struct http_info *inf = parse_http_request(buffer[0]);
+      char *response = route_command(inf->route, inf->request_t);
+      char *response_full = post_response(inf, response, t);
+      size_t s_send = send(sfd, response_full, strlen(response_full), 0);
+
+      if (s_send != strlen(response_full)) {
+        while (s_send <= strlen(response_full)) {
+          s_send += send(sfd, (response_full + s_send),
+                         strlen(response_full) - s_send, 0);
+        }
+      }
+
+      free(response_full);
+      free_http_info(inf);
+      if (t == FUNC) {
+        free(response);
+      }
+    }
 
     pthread_mutex_unlock(&queue_mutex);
   }
   return NULL;
 }
 
-void init_threads(int n_threads) {
+static void *discovery_thread_task(void *args) {
+  int sockfd;
+  memcpy(&sockfd, args, sizeof(int));
+
+  while (run_workers) {
+    pthread_mutex_lock(&queue_mutex);
+
+    struct sockaddr_storage adr;
+    socklen_t adr_size = sizeof(adr);
+    int new_fd = accept(sockfd, (struct sockaddr *)&adr, &adr_size);
+    if (new_fd != -1) {
+      dispatch_connection(new_fd);
+    } else {
+      perror("Failed to connect to listener");
+    }
+    pthread_mutex_unlock(&queue_mutex);
+  }
+  return NULL;
+}
+
+void init_threads(int n_threads, int sockfd) {
   num_threads = n_threads;
   thread_list = (pthread_t *)malloc(sizeof(pthread_t) * num_threads);
   thread_valid = (int *)calloc(num_threads, sizeof(int));
@@ -46,17 +103,27 @@ void init_threads(int n_threads) {
   list.capacity = n_threads * 2;
   for (int i = 0; i < n_threads; i++) {
     if (pthread_create(&thread_list[i], NULL, worker_thread, NULL) != 0) {
-      printf("Thread number %d failed to init\n", i);
+      fprintf(stderr, "Thread number %d failed to init\n", i);
       thread_valid[i] = 0;
     } else {
       thread_valid[i] = 1;
     }
   }
+
+  int *sfdptr = (int *)malloc(sizeof(int));
+  *sfdptr = sockfd;
+  if (pthread_create(&discovery_thread, (void *)sfdptr, discovery_thread_task,
+                     NULL) != 0) {
+    fprintf(stderr, "Failed discovery thread");
+  }
 }
 
-void stop_worker_threads(void) { run_workers = 0; }
-
 void clean_workers(void) {
+  pthread_mutex_lock(&queue_mutex);
+  run_workers = 0;
+  pthread_cond_broadcast(&thread_cond);
+  pthread_mutex_unlock(&queue_mutex);
+
   for (int i = 0; i < num_threads; i++) {
     if (thread_valid[i]) {
       pthread_join(thread_list[i], NULL);
@@ -66,6 +133,7 @@ void clean_workers(void) {
   free(thread_list);
   free(list.list);
 }
+void stop_worker_threads(void) { run_workers = 0; }
 
 static int get_sock_fd(void) {
   if (list.size <= 0) {
