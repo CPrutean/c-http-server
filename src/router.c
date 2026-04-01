@@ -1,4 +1,5 @@
 #include "router.h"
+#include "global_includes.h"
 
 static char **routes;
 static void **callbacks;
@@ -26,6 +27,7 @@ static int get_route_ind(char *route) {
 
 void init_routes(void) {
   routes = (char **)malloc(sizeof(char *) * 2);
+  callback_types = (response_type_t *)malloc(sizeof(response_type_t) * 2);
   for (int i = 0; i < 2; i++) {
     routes[i] = (char *)malloc(sizeof(char) * 6);
   }
@@ -35,7 +37,7 @@ void init_routes(void) {
   callbacks[0] = NULL;
 
   snprintf(routes[1], 6, "%s", "/root");
-  routes[1][6] = '\0';
+  routes[1][5] = '\0';
   callbacks[1] = NULL;
 
   num_routes = 2;
@@ -52,7 +54,7 @@ void add_route(char *route, void *ptr, response_type_t t) {
       return;
     }
     size_t s = strlen(route);
-    memcpy(new_r, routes, sizeof(char *) * (num_routes + 1));
+    memcpy(new_r, routes, sizeof(char *) * (s + 1));
     free(routes);
     routes = new_r;
 
@@ -62,7 +64,8 @@ void add_route(char *route, void *ptr, response_type_t t) {
       return;
     }
 
-    snprintf(new_route, s + 1, route, "%s");
+    snprintf(new_route, s + 1, route, "%s", route);
+    new_route[s] = '\0';
     routes[num_routes] = new_route;
 
     void **new_c = (void *)malloc(sizeof(void *) * (num_routes + 1));
@@ -93,7 +96,7 @@ void add_route(char *route, void *ptr, response_type_t t) {
 void update_route(char *route, void *ptr, response_type_t t) {
   int ind = get_route_ind(route);
 
-  if (ind == -1) {
+  if (ind != -1) {
     callbacks[ind] = ptr;
     callback_types[ind] = t;
   } else {
@@ -115,9 +118,11 @@ static char *handle_string_requests(int ind, http_command_t t) {
   };
 }
 
-// TODO implement http_command behavior
 char *route_command(char *route, http_command_t command) {
   int i = get_route_ind(route);
+  if (i == -1) {
+    fprintf(stderr, "Route wasnt found");
+  }
   if (callback_types[i] == STRING) {
     return handle_string_requests(i, command);
   } else {
@@ -140,4 +145,13 @@ void close_routes(void) {
   free(callbacks);
   free(callback_types);
   free(routes);
+}
+
+response_type_t get_route_type(char *route) {
+  int exists = get_route_ind(route);
+  if (exists != -1) {
+    return callback_types[exists];
+  } else {
+    return 255;
+  }
 }
