@@ -1,4 +1,5 @@
 #include "http_parser.h"
+#include "router.h"
 
 static const char *headers[] = {"GET",     "HEAD",    "POST",  "PUT", "DELETE",
                                 "CONNECT", "OPTIONS", "TRACE", NULL};
@@ -13,10 +14,11 @@ static int check_in_curr_sec(int sc, const char *line) {
   int i = 0;
   int found = 0;
   while (sections[sc][i] != NULL) {
-    if (strncmp(line, sections[sc][i], strlen(sections[sc][i])) != 0) {
+    if (strncmp(line, sections[sc][i], strlen(sections[sc][i])) == 0) {
       found = 1;
       break;
     }
+    i++;
   }
   return found;
 }
@@ -109,6 +111,7 @@ struct http_info *parse_http_request(const char *req) {
 
   for (size_t i = 0; i < slen - 1; i++) {
     if (req[i] == '\r' && check_in_curr_sec(section_count, &req[i])) {
+      section_count++;
       end_of_section[0] = end_of_section[1];
       end_of_section[1] = i;
       print_into_section(section_count, end_of_section, req, r);
@@ -116,4 +119,38 @@ struct http_info *parse_http_request(const char *req) {
   }
 
   return r;
+}
+
+// req here is the length of the response???
+// Why did i write this idek
+char *post_response(const struct http_info *info, const char *req,
+                    int is_string) {
+
+  size_t s = strlen(req);
+  if (is_string) {
+    size_t len = 0;
+    char *buffer = (char *)malloc(sizeof(char) * s * 2);
+    len += snprintf(buffer, s * 2, "%s", info->http_version);
+    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
+    len += snprintf((buffer + len), s * 2, "%s", "Server: MyCustomServer/1.0");
+    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
+    len += snprintf((buffer + len), s * 2, "%s",
+                    "Content-Type: text/html; charset=UTF-8");
+    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
+    len += snprintf((buffer + len), s * 2, "%s %ld", "Content-Length: ", s);
+    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
+    len += snprintf((buffer + len), s * 2, "%s", "req");
+    return buffer;
+  } else {
+    // Function will handle its own http headers due to potential custom nature
+    return req;
+  }
+}
+
+void free_http_info(struct http_info *info) {
+  free(info->http_version);
+  free(info->route);
+  free(info->metadata);
+  free(info->content);
+  free(info);
 }
