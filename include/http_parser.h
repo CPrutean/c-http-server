@@ -3,7 +3,9 @@
 #include "global_includes.h"
 
 struct http_info *parse_http_request(const char *req);
-char *post_response(const struct http_info *info, const char *resp,
-                    int is_string);
+
+const char *post_response(const struct http_info *info, const char *resp,
+                          int is_string);
+
 void free_http_info(struct http_info *info);
 #endif

@@ -10,8 +10,9 @@ static int get_route_ind(char *route) {
   if (route == NULL) {
     return -1;
   }
+
   for (int i = 0; i < num_routes; i++) {
-    if (strcmp(routes[i], route) == 0) {
+    if (strncmp(routes[i], route, strlen(routes[i])) == 0) {
       return i;
     }
   }
@@ -25,7 +26,7 @@ void init_routes(void) {
     routes[i] = (char *)malloc(sizeof(char) * 6);
   }
   callbacks = (void *)malloc(sizeof(void *) * 2);
-  snprintf(routes[0], 6, "%s", "/");
+  snprintf(routes[0], 2, "%s", "/");
   routes[0][1] = '\0';
   callbacks[0] = NULL;
 
@@ -90,6 +91,7 @@ void update_route(char *route, void *ptr, response_type_t t) {
   int ind = get_route_ind(route);
 
   if (ind != -1) {
+    fprintf(stdout, "Update success\n");
     callbacks[ind] = ptr;
     callback_types[ind] = t;
   } else {

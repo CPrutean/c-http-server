@@ -1,102 +1,79 @@
 #include "http_parser.h"
+#include "global_includes.h"
 #include "router.h"
 
 static const char *headers[] = {"GET",     "HEAD",    "POST",  "PUT", "DELETE",
                                 "CONNECT", "OPTIONS", "TRACE", NULL};
-// For help with parsing
-static const char *http_response_bodies[] = {
-    "Date:",     "Server:", "Content-Type:", "Content-Length:", "Connection:",
-    "Location:", NULL};
 
-static const char **sections[] = {headers, http_response_bodies, NULL};
-
-static int check_in_curr_sec(int sc, const char *line) {
+static int is_whitespace(char c) {
+  const char strip[] = {'\n', '\r', ' ', '\t', 'E'};
   int i = 0;
-  int found = 0;
-  while (sections[sc][i] != NULL) {
-    if (strncmp(line, sections[sc][i], strlen(sections[sc][i])) == 0) {
-      found = 1;
-      break;
+  while (strip[i] != 'E') {
+    if (c == strip[i]) {
+      return 1;
     }
-    i++;
+    i += 1;
   }
-  return found;
+  return 0;
 }
 
-static void parse_first_line(int sc_ind[2], const char *req,
-                             struct http_info *info) {
+static char *strip_whitespace(char *str) {
+  int chars_to_strip = 0;
+  size_t s = strlen(str);
+  for (size_t i = 0; i < s; i++) {
+    if (is_whitespace(str[i])) {
+      chars_to_strip++;
+    }
+  }
+  char *buffer = (char *)malloc(sizeof(char) * (s - chars_to_strip + 1));
+  size_t i;
+  int j = 0;
+  for (i = 0; i < s; i++) {
+    if (!is_whitespace(str[i])) {
+      buffer[j++] = str[i];
+    }
+  }
+  buffer[j] = '\0';
+  free(str);
+  return buffer;
+}
+
+static void parse_first_line(struct http_info *inf, const char *line,
+                             int line_end) {
   int token_count = 0;
-  int token_inds[2] = {0, 0};
-  int l = sc_ind[1] - sc_ind[0];
-  int tl;
-  char *buffer;
-  for (int i = 0; i < l; i++) {
-    if (req[i] == ' ') {
-      token_inds[0] = token_inds[1];
-      token_inds[1] = i;
+  int token_ind = 0;
+  for (int i = 0; i < line_end; i++) {
+    if (line[i] == ' ') {
       token_count++;
-      if (token_count != 1) {
-        tl = token_inds[1] - token_inds[0] + 1;
-        buffer = (char *)malloc(sizeof(char) * tl);
-        snprintf(buffer, tl - 1, "%s", (req + token_inds[0]));
-        buffer[tl] = '\0';
-      }
-    }
-
-    // Command type
-    if (token_count == 1) {
-      int j = 0;
-      while (headers[j] != NULL) {
-        if (strncmp(headers[j], req, strlen(headers[j])) == 0) {
-          info->request_t = (http_command_t)j;
-          break;
+      if (token_count == 1) {
+        int ind = 0;
+        int found = 0;
+        while (headers[ind] != NULL) {
+          if (strncmp(headers[ind], line, strlen(headers[ind])) == 0) {
+            found = 1;
+            break;
+          }
+          ind++;
         }
-        j++;
+        if (!found) {
+          inf->request_t = 255;
+        } else {
+          inf->request_t = ind;
+        }
+      } else if (token_count == 2) {
+        char *buffer = (char *)malloc(sizeof(char) * (i - token_ind + 1));
+        snprintf(buffer, i - token_ind + 1, "%s", (line + token_ind));
+        buffer = strip_whitespace(buffer);
+        inf->route = buffer;
       }
-    } else if (token_count == 2) {
-      info->route = buffer;
-    } else if (token_count == 3) {
-      info->http_version = buffer;
-    } else {
-      fprintf(stderr, "More than 3 tokens in initial line");
+
+      token_ind = i;
     }
   }
-}
-
-static void print_into_section(int section_count, int sc_ind[2],
-                               const char *req, struct http_info *info) {
-  if (req == NULL || info == NULL) {
-    fprintf(stderr, "print_into_section");
-    return;
-  }
-
-  size_t s = sc_ind[1] - sc_ind[0] + 1;
-  char *buff = (char *)malloc(sizeof(char) * s);
-  if (buff == NULL) {
-    fprintf(stderr, "Failed to allocate thread memory");
-    return;
-  }
-
-  switch (section_count) {
-  // First initial header containing root, version and command
-  case (0):
-    parse_first_line(sc_ind, req, info);
-    break;
-  // header for our metadata
-  case (1):
-    snprintf(buff, s, "%s", req);
-    buff[s - 1] = '\0';
-    info->metadata = buff;
-    break;
-  // For the content part of the header
-  case (2):
-    snprintf(buff, s, "%s", req);
-    buff[s - 1] = '\0';
-    info->content = buff;
-    break;
-  default:
-    break;
-  };
+  char *buffer = (char *)malloc(sizeof(char) * (line_end - token_ind + 1));
+  snprintf(buffer, line_end - token_ind + 1, "%s", (line + token_ind));
+  buffer = strip_whitespace(buffer);
+  inf->http_version = buffer;
 }
 
 struct http_info *parse_http_request(const char *req) {
@@ -105,46 +82,76 @@ struct http_info *parse_http_request(const char *req) {
     fprintf(stderr, "Failed to allocate mem at parse_http_request");
     return NULL;
   }
-  size_t slen = strlen(req);
+  size_t s = strlen(req);
+  int line_count = 0;
+  int ioll = 0;
+  int iols = 0;
+  for (size_t i = 0; i < s; i++) {
+    if (req[i] == '\r') {
+      line_count++;
+      if (line_count == 1) {
+        parse_first_line(r, req, i);
 
-  int section_count = 0;
-  int end_of_section[2] = {0, 0};
+        iols = i;
+      } else if (i - ioll <= 2) {
+        // If empty line
+        char *buffer = (char *)malloc(sizeof(char) * (i - iols + 1));
+        if (!buffer) {
+          fprintf(stderr, "Out of memory\n");
+        }
+        snprintf(buffer, i - iols + 1, "%s", (req + iols));
+        buffer = strip_whitespace(buffer);
+        r->metadata = buffer;
 
-  for (size_t i = 0; i < slen - 1; i++) {
-    if (req[i] == '\r' && !check_in_curr_sec(section_count, &req[i])) {
-      fprintf(stderr, "Found new section");
-      section_count++;
-      end_of_section[0] = end_of_section[1];
-      end_of_section[1] = i;
-      print_into_section(section_count, end_of_section, req, r);
+        iols = i;
+      }
+      ioll = i;
     }
   }
+  // Then copy data into new buffer from start to end
+  char *buffer = (char *)malloc(sizeof(char) * (s - iols + 1));
+  if (!buffer) {
+    fprintf(stderr, "Out of memory\n");
+  }
+  snprintf(buffer, s - iols + 1, "%s", (req + iols));
+  r->content = buffer;
 
   return r;
 }
-
 // req here is the length of the response???
 // Why did i write this idek
-char *post_response(const struct http_info *info, const char *req,
-                    int is_string) {
 
-  size_t s = strlen(req);
+const char *post_response(const struct http_info *info, const char *req,
+                          int is_string) {
+
+  if (!is_string || !req || !info || !info->http_version) {
+    return NULL;
+  }
+
   if (is_string) {
-    size_t len = 0;
-    char *buffer = (char *)malloc(sizeof(char) * s * 2);
-    len += snprintf(buffer, s * 2, "%s", info->http_version);
-    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
-    len += snprintf((buffer + len), s * 2, "%s", "Server: MyCustomServer/1.0");
-    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
-    len += snprintf((buffer + len), s * 2, "%s",
-                    "Content-Type: text/html; charset=UTF-8");
-    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
-    len += snprintf((buffer + len), s * 2, "%s %ld", "Content-Length: ", s);
-    len += snprintf((buffer + len), s * 2, "%s", "\r\n");
-    len += snprintf((buffer + len), s * 2, "%s", req);
+    size_t s = strlen(req);
+
+    const char *fmt = "%s\r\n"
+                      "Server: MyCustomServer/1.0\r\n"
+                      "Content-Type: text/html; charset=UTF-8\r\n"
+                      "Content-Length: %zu\r\n"
+                      "\r\n"
+                      "%s";
+
+    int required_len = snprintf(NULL, 0, fmt, info->http_version, s, req);
+    if (required_len < 0) {
+      return NULL;
+    }
+
+    char *buffer = (char *)malloc(required_len + 1);
+    if (buffer == NULL) {
+      return NULL;
+    }
+
+    snprintf(buffer, required_len + 1, fmt, info->http_version, s, req);
+
     return buffer;
   } else {
-    // Function will handle its own http headers due to potential custom nature
     return req;
   }
 }
