@@ -10,6 +10,12 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#define MIN(a, b) a < b ? a : b
+
+#define HTTP_BAD_REQUEST                                                       \
+  "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "   \
+  "16\r\nConnection: close\r\n\r\n400 Bad Request."
+
 typedef enum Response_type_t { FUNC = 0, STRING } response_type_t;
 typedef enum http_command_t {
   GET = 0,

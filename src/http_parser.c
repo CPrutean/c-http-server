@@ -38,8 +38,8 @@ static void parse_first_line(int sc_ind[2], const char *req,
       if (token_count != 1) {
         tl = token_inds[1] - token_inds[0] + 1;
         buffer = (char *)malloc(sizeof(char) * tl);
-        snprintf(buffer, tl, "%s", (req + token_inds[0]));
-        buffer[tl - 1] = '\0';
+        snprintf(buffer, tl - 1, "%s", (req + token_inds[0]));
+        buffer[tl] = '\0';
       }
     }
 
@@ -103,6 +103,7 @@ struct http_info *parse_http_request(const char *req) {
   struct http_info *r = (struct http_info *)malloc(sizeof(struct http_info));
   if (r == NULL) {
     fprintf(stderr, "Failed to allocate mem at parse_http_request");
+    return NULL;
   }
   size_t slen = strlen(req);
 
@@ -110,7 +111,8 @@ struct http_info *parse_http_request(const char *req) {
   int end_of_section[2] = {0, 0};
 
   for (size_t i = 0; i < slen - 1; i++) {
-    if (req[i] == '\r' && check_in_curr_sec(section_count, &req[i])) {
+    if (req[i] == '\r' && !check_in_curr_sec(section_count, &req[i])) {
+      fprintf(stderr, "Found new section");
       section_count++;
       end_of_section[0] = end_of_section[1];
       end_of_section[1] = i;
@@ -139,7 +141,7 @@ char *post_response(const struct http_info *info, const char *req,
     len += snprintf((buffer + len), s * 2, "%s", "\r\n");
     len += snprintf((buffer + len), s * 2, "%s %ld", "Content-Length: ", s);
     len += snprintf((buffer + len), s * 2, "%s", "\r\n");
-    len += snprintf((buffer + len), s * 2, "%s", "req");
+    len += snprintf((buffer + len), s * 2, "%s", req);
     return buffer;
   } else {
     // Function will handle its own http headers due to potential custom nature

@@ -5,26 +5,19 @@ static char **routes;
 static void **callbacks;
 static response_type_t *callback_types;
 static int num_routes;
-static const char *HTTP_BAD_REQUEST =
-    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: "
-    "16\r\nConnection: close\r\n\r\n400 Bad Request.";
 
 static int get_route_ind(char *route) {
-  int found = 0;
-  int i;
-  for (i = 0; i < num_routes; i++) {
-    if (strncmp(routes[i], route, strlen(routes[i])) == 0) {
-      found = 1;
-      break;
-    }
-  }
-  if (found) {
-    return i;
-  } else {
+  if (route == NULL) {
     return -1;
   }
-}
+  for (int i = 0; i < num_routes; i++) {
+    if (strcmp(routes[i], route) == 0) {
+      return i;
+    }
+  }
 
+  return -1;
+}
 void init_routes(void) {
   routes = (char **)malloc(sizeof(char *) * 2);
   callback_types = (response_type_t *)malloc(sizeof(response_type_t) * 2);

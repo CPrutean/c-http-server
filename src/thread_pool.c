@@ -1,6 +1,8 @@
 #include "thread_pool.h"
+#include "global_includes.h"
 #include "http_parser.h"
 #include "router.h"
+#include <unistd.h>
 
 #define RECV_BUFF_S 1024
 
@@ -28,36 +30,53 @@ static void add_sock_fd(int sockfd);
 static int is_task_empty(void);
 
 static void *worker_thread(void *args) {
-  char *buffer[RECV_BUFF_S];
+  char buffer[RECV_BUFF_S];
+  memset(buffer, 0, sizeof(buffer));
 
   while (run_workers) {
     pthread_mutex_lock(&queue_mutex);
-
     while (is_task_empty()) {
       pthread_cond_wait(&thread_cond, &queue_mutex);
     }
 
-    memset(buffer, 0, sizeof(buffer));
     int sfd = get_sock_fd();
+
+    pthread_mutex_unlock(&queue_mutex);
+
+    memset(buffer, 0, sizeof(buffer));
     // Implement actual work to be done
     size_t s = recv(sfd, buffer, sizeof(buffer) - 1, 0);
-    if (s > 0) {
+    fprintf(stdout, "Message received: %s\n", buffer);
+    if (s >= 0) {
 
-      fprintf(stdout, "Message recieved");
-
-      response_type_t t = get_route_type(inf->route);
-      if (t == 255) {
-        fprintf(stderr, "INVALID ROUTE");
+      struct http_info *inf = parse_http_request(buffer);
+      fprintf(stderr, "Parse success\n");
+      if (inf == NULL) {
+        fprintf(stderr, "Failed to parse request\n");
         continue;
       }
 
-      struct http_info *inf = parse_http_request(buffer[0]);
+      printf(
+          "Info dump\n Route: %s\n MetaData: %s\n Conent: %s\n, HttpVsn: %s\n",
+          inf->route, inf->metadata, inf->content, inf->http_version);
+
+      response_type_t t = get_route_type(inf->route);
+      fprintf(stderr, "Found response success\n");
+      if (t == 255) {
+        fprintf(stderr, "INVALID ROUTE");
+        send(sfd, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST), 0);
+
+        continue;
+      }
+
       char *response = route_command(inf->route, inf->request_t);
       char *response_full = post_response(inf, response, t);
+
+      fprintf(stderr, "Message success\n");
       size_t s_send = send(sfd, response_full, strlen(response_full), 0);
 
       if (s_send != strlen(response_full)) {
-        while (s_send <= strlen(response_full)) {
+        while (s_send < strlen(response_full)) {
           s_send += send(sfd, (response_full + s_send),
                          strlen(response_full) - s_send, 0);
         }
@@ -68,29 +87,28 @@ static void *worker_thread(void *args) {
       if (t == FUNC) {
         free(response);
       }
+    } else {
+      fprintf(stderr, "message parse fail\n");
     }
-
-    pthread_mutex_unlock(&queue_mutex);
+    close(sfd);
   }
   return NULL;
 }
 
 static void *discovery_thread_task(void *args) {
-  int sockfd;
-  memcpy(&sockfd, args, sizeof(int));
-
+  int sfd;
+  memcpy(&sfd, args, sizeof(int));
   while (run_workers) {
-    pthread_mutex_lock(&queue_mutex);
 
-    struct sockaddr_storage adr;
+    struct sockaddr_in adr;
     socklen_t adr_size = sizeof(adr);
-    int new_fd = accept(sockfd, (struct sockaddr *)&adr, &adr_size);
+    int new_fd = accept(sfd, (struct sockaddr *)&adr, &adr_size);
     if (new_fd != -1) {
       dispatch_connection(new_fd);
+      fprintf(stderr, "Accept success\n");
     } else {
-      perror("Failed to connect to listener");
+      fprintf(stderr, "Accept failed\n");
     }
-    pthread_mutex_unlock(&queue_mutex);
   }
   return NULL;
 }
@@ -112,8 +130,8 @@ void init_threads(int n_threads, int sockfd) {
 
   int *sfdptr = (int *)malloc(sizeof(int));
   *sfdptr = sockfd;
-  if (pthread_create(&discovery_thread, (void *)sfdptr, discovery_thread_task,
-                     NULL) != 0) {
+  if (pthread_create(&discovery_thread, NULL, discovery_thread_task, sfdptr) !=
+      0) {
     fprintf(stderr, "Failed discovery thread");
   }
 }
