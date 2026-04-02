@@ -124,36 +124,32 @@ struct http_info *parse_http_request(const char *req) {
 const char *post_response(const struct http_info *info, const char *req,
                           int is_string) {
 
-  if (!is_string || !req || !info || !info->http_version) {
+  if (!req || !info || !info->http_version) {
     return NULL;
   }
 
-  if (is_string) {
-    size_t s = strlen(req);
+  size_t s = strlen(req);
 
-    const char *fmt = "%s\r\n"
-                      "Server: MyCustomServer/1.0\r\n"
-                      "Content-Type: text/html; charset=UTF-8\r\n"
-                      "Content-Length: %zu\r\n"
-                      "\r\n"
-                      "%s";
+  const char *fmt = "%s\r\n"
+                    "Server: MyCustomServer/1.0\r\n"
+                    "Content-Type: text/html; charset=UTF-8\r\n"
+                    "Content-Length: %zu\r\n"
+                    "\r\n"
+                    "%s";
 
-    int required_len = snprintf(NULL, 0, fmt, info->http_version, s, req);
-    if (required_len < 0) {
-      return NULL;
-    }
-
-    char *buffer = (char *)malloc(required_len + 1);
-    if (buffer == NULL) {
-      return NULL;
-    }
-
-    snprintf(buffer, required_len + 1, fmt, info->http_version, s, req);
-
-    return buffer;
-  } else {
-    return req;
+  int required_len = snprintf(NULL, 0, fmt, info->http_version, s, req);
+  if (required_len < 0) {
+    return NULL;
   }
+
+  char *buffer = (char *)malloc(required_len + 1);
+  if (buffer == NULL) {
+    return NULL;
+  }
+
+  snprintf(buffer, required_len + 1, fmt, info->http_version, s, req);
+
+  return buffer;
 }
 
 void free_http_info(struct http_info *info) {

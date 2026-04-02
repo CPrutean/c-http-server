@@ -84,6 +84,8 @@ static void *worker_thread(void *args) {
 
       free(response_full);
       free_http_info(inf);
+      // A function callback will return a new buffer, an string will return
+      // itself as a literal
       if (t == FUNC) {
         free(response);
       }

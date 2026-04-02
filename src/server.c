@@ -1,5 +1,6 @@
 #include "server.h"
 #include "thread_pool.h"
+#include <unistd.h>
 
 static int max_connections = 10;
 static volatile int running = 0;
@@ -44,6 +45,12 @@ int create_server_socket(int port) {
     fprintf(stderr, "bind error");
     exit(1);
   }
+
+  if (listen(fd, 10) == -1) {
+    fprintf(stderr, "Listen failed\n");
+    close(fd);
+  }
+
   freeaddrinfo(res);
   return fd;
 }

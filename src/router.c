@@ -83,6 +83,7 @@ void add_route(char *route, void *ptr, response_type_t t) {
     memcpy(new_t, callback_types, sizeof(response_type_t) * (num_routes));
     free(callback_types);
     callback_types = new_t;
+
     num_routes++;
   }
 }

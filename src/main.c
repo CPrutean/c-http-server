@@ -11,18 +11,13 @@ int main() {
   init_routes();
   update_route("/", "Hello world", STRING);
   int sockfd = create_server_socket(8080);
-
-  if (listen(sockfd, 10) == -1) {
-    fprintf(stderr, "Listen failed\n");
-    close(sockfd);
-  }
-
   start_server(sockfd);
   while (1) {
     sleep(1);
   }
 
   clean_workers();
+  close_routes();
 
   return 0;
 }
