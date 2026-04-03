@@ -7,6 +7,7 @@ add_library(http-server-lib STATIC
   src/http_parser.c
   src/router.c
   src/thread_pool.c
+  src/req_handler.c
 )
 
 target_include_directories(http-server-lib PUBLIC include)
