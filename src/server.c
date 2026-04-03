@@ -26,7 +26,7 @@ int create_server_socket(int port) {
   char port_str[6];
   snprintf(port_str, 6, "%d", port);
 
-  status = getaddrinfo(NULL, port_str, &hints, &res);
+  status = getaddrinfo(INADDR_ANY, port_str, &hints, &res);
   if (status != 0) {
     fprintf(stderr, "gai error: %s\n", gai_strerror(status));
     exit(1);

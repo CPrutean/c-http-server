@@ -70,7 +70,7 @@ static void *worker_thread(void *args) {
       }
 
       char *response = route_command(inf->route, inf->request_t);
-      char *response_full = post_response(inf, response, t);
+      char *response_full = build_response(inf, response);
 
       fprintf(stderr, "Message success\n");
       size_t s_send = send(sfd, response_full, strlen(response_full), 0);
