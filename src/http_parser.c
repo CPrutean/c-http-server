@@ -12,7 +12,7 @@ static int is_whitespace(char c) {
     if (c == strip[i]) {
       return 1;
     }
-    i += 1;
+    i++;
   }
   return 0;
 }
@@ -20,21 +20,29 @@ static int is_whitespace(char c) {
 static char *strip_whitespace(char *str) {
   int chars_to_strip = 0;
   size_t s = strlen(str);
+  int inds[2] = {0, s - 1};
   for (size_t i = 0; i < s; i++) {
-    if (is_whitespace(str[i])) {
-      chars_to_strip++;
-    }
-  }
-  char *buffer = (char *)malloc(sizeof(char) * (s - chars_to_strip + 1));
-  size_t i;
-  int j = 0;
-  for (i = 0; i < s; i++) {
     if (!is_whitespace(str[i])) {
-      buffer[j++] = str[i];
+      inds[0] = i;
+      break;
     }
   }
-  buffer[j] = '\0';
-  free(str);
+
+  for (size_t i = s - 1; i >= 0; i--) {
+    if (!is_whitespace(str[i])) {
+      inds[1] = i;
+      break;
+    }
+  }
+
+  if (inds[0] > inds[1] || (inds[0] == 0 && inds[1] == 0)) {
+    fprintf(stderr, "Failed to strip whitespace\n");
+    return NULL;
+  }
+  size_t s2 = inds[1] - inds[0] + 2;
+
+  char *buffer = (char *)malloc(sizeof(char) * s2);
+  snprintf(buffer, s2, "%s", (str + inds[0]));
   return buffer;
 }
 
@@ -121,14 +129,13 @@ struct http_info *parse_http_request(const char *req) {
 // req here is the length of the response???
 // Why did i write this idek
 
-const char *post_response(const struct http_info *info, const char *req,
-                          int is_string) {
+const char *build_response(const struct http_info *info, const char *resp) {
 
-  if (!req || !info || !info->http_version) {
+  if (!resp || !info || !info->http_version) {
     return NULL;
   }
 
-  size_t s = strlen(req);
+  size_t s = strlen(resp);
 
   const char *fmt = "%s\r\n"
                     "Server: MyCustomServer/1.0\r\n"
@@ -137,7 +144,7 @@ const char *post_response(const struct http_info *info, const char *req,
                     "\r\n"
                     "%s";
 
-  int required_len = snprintf(NULL, 0, fmt, info->http_version, s, req);
+  int required_len = snprintf(NULL, 0, fmt, info->http_version, s, resp);
   if (required_len < 0) {
     return NULL;
   }
@@ -147,7 +154,7 @@ const char *post_response(const struct http_info *info, const char *req,
     return NULL;
   }
 
-  snprintf(buffer, required_len + 1, fmt, info->http_version, s, req);
+  snprintf(buffer, required_len + 1, fmt, info->http_version, s, resp);
 
   return buffer;
 }
